@@ -1,0 +1,22 @@
+Opération Mistral, vérification J1
+Guilde : tramontane
+Date : 2026-11-02 17:02:20
+
+OK   2/2  les 3 scripts existent dans outils/ et sont exécutables
+OK   1/1  shellcheck sans avertissement : sauvegarde.sh
+OK   1/1  shellcheck sans avertissement : top-attaquants.sh
+OK   1/1  shellcheck sans avertissement : menage-logs.sh
+OK   1/1  sauvegarde.sh sans argument : usage sur stderr et code non nul
+OK   1/1  sauvegarde.sh sur un dossier absent : code non nul
+OK   1/1  archive nommée partage-test-AAAAMMJJ-HHMMSS.tar.gz
+OK   2/2  l'archive contient tout le dossier, noms avec espaces compris
+OK   1/1  rotation : 7 archives gardées, les plus anciennes supprimées
+OK   1/1  journal /var/log/mistral/sauvegarde.log horodaté [AAAA-MM-JJTHH:MM:SS]
+OK   3/3  top-attaquants.sh : les 5 premières adresses, au bon format
+OK   2/2  top-attaquants.sh -n 3
+OK   1/1  menage-logs.sh -n : affiche sans rien toucher
+OK   1/1  menage-logs.sh : compresse seulement les .log de 2 jours ou plus
+OK   1/1  menage-logs.sh relancé : rien ne change, code 0
+
+NOTE : 20/20   XP gagnée : 200
+Sceau : 87ebffa4a656
