@@ -1,5 +1,7 @@
 # Mistral-Tramontane
 BootCamp S3 
 
-TEST UPDATE
-toto
+chef d'equipe : Kevin
+artisan Bash : Haulgat
+mage Python : Mouhamed
+Gardien : Tiago
