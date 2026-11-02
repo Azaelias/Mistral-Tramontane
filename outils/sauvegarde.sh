@@ -1,33 +1,71 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+GARDER=7
+
 usage() {
-    echo "usage: $0 SOURCE [DESTINATION]" >&2
+    echo "usage: $0 [-k N] SOURCE [DESTINATION]" >&2
     exit 1
 }
 
-# 1. Contrôle du nombre d'arguments
+# Fonction de journalisation horodatée ISO-8601
+log() {
+    local msg="$1"
+    local horodate
+    horodate="$(date +%Y-%m-%dT%H:%M:%S)"
+    printf "[%s] %s\n" "$horodate" "$msg" | tee -a /var/log/mistral/sauvegarde.log
+}
+
+# Analyse des options courtes (-k et -h)
+while getopts ":k:h" opt; do
+    case "$opt" in
+        k) GARDER="$OPTARG" ;;
+        h) usage ;;
+        *) usage ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+# Contrôle des arguments obligatoires
 [[ $# -ge 1 ]] || usage
 
-# 2. Récupération des arguments et nettoyage du slash final
 SOURCE="${1%/}"
 DEST="${2:-/srv/sauvegardes}"
 
-# 3. Vérification de l'existence du dossier source
+# Validation du dossier source
 if [[ ! -d "$SOURCE" ]]; then
     echo "erreur: $SOURCE n'est pas un dossier" >&2
     exit 2
 fi
 
-# 4. Calcul des noms et de l'horodatage
+# Création des dossiers requis
+mkdir -p "$DEST"
+mkdir -p /var/log/mistral
+
 NOM="$(basename "$SOURCE")"
 HORODATE="$(date +%Y%m%d-%H%M%S)"
-ARCHIVE="$DEST/$NOM-$HORODATE.tar.gz"
+ARCHIVE_FINALE="$DEST/$NOM-$HORODATE.tar.gz"
+ARCHIVE_PART="$ARCHIVE_FINALE.part"
 
-# 5. Création du dossier destination s'il n'existe pas
-mkdir -p "$DEST"
+# Sécurité : suppression du fichier .part si le script s'interrompt ou échoue
+trap 'rm -f "$ARCHIVE_PART"' EXIT
 
-# 6. Archivage tar.gz à partir du dossier parent
-tar -czf "$ARCHIVE" -C "$(dirname "$SOURCE")" "$NOM"
+log "Début de la sauvegarde de $SOURCE vers $ARCHIVE_FINALE"
 
-echo "Sauvegarde réussie : $ARCHIVE"
+# Création dans un fichier temporaire puis renommage atomique
+tar -czf "$ARCHIVE_PART" -C "$(dirname "$SOURCE")" "$NOM"
+mv "$ARCHIVE_PART" "$ARCHIVE_FINALE"
+
+log "Archive créée : $ARCHIVE_FINALE"
+
+# Rotation : isole les archives au-delà des K plus récentes
+mapfile -t ANCIENNES < <(find "$DEST" -maxdepth 1 -type f -name "$NOM-*.tar.gz" | sort -r | tail -n +"$((GARDER + 1))")
+
+for archive in "${ANCIENNES[@]}"; do
+    if [[ -n "$archive" ]]; then
+        rm -f -- "$archive"
+        log "rotation: $archive supprimee"
+    fi
+done
+
+exit 0
