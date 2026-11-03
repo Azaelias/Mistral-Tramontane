@@ -2,6 +2,7 @@
 
 import argparse
 import csv
+import json
 import re
 import sys
 import unicodedata
@@ -32,7 +33,14 @@ def main():
     p.add_argument("--csv", required=True, type=Path)
     p.add_argument("--sortie", required=True, type=Path)
     p.add_argument("--domaine", default="mistral.test")
+##############################################
+    p.add_argument(
+        "--format",
+        choices=["csv", "json"],
+        default="csv",
+        help="Format de sortie (csv ou json)")
     a = p.parse_args()
+##############################################
 
     # Vérifier que le fichier existe
     if not a.csv.is_file():
@@ -113,16 +121,47 @@ def main():
         comptes.sort()
 
         a.sortie.mkdir(parents=True, exist_ok=True)
-
+############################################################################
         # Écrire comptes.csv
-        with (a.sortie / "comptes.csv").open(
-            "w", encoding="utf-8", newline=""
-        ) as f:
-            w = csv.writer(f, delimiter=";")
-            w.writerow([
-                "login", "email", "nom", "prenom", "site", "date_arrivee"
-            ])
-            w.writerows(comptes)
+#        with (a.sortie / "comptes.csv").open(
+ #           "w", encoding="utf-8", newline=""
+  #      ) as f:
+   #         w = csv.writer(f, delimiter=";")
+    #        w.writerow([
+     #           "login", "email", "nom", "prenom", "site", "date_arrivee"
+      #      ])
+       #     w.writerows(comptes)
+############################################################################
+# Tiago fait des test merci de votre indulgence XD
+############################################################################
+
+        champs = [
+            "login", "email", "nom", "prenom", "site", "date_arrivee"
+        ]
+
+        if a.format == "csv":
+            with (a.sortie / "comptes.csv").open(
+                "w", encoding="utf-8", newline=""
+            ) as f:
+                w = csv.writer(f, delimiter=";")
+                w.writerow(champs)
+                w.writerows(comptes)
+
+        else:
+            comptes_json = [
+                dict(zip(champs, compte))
+                for compte in comptes
+            ]
+
+            with (a.sortie / "comptes.json").open(
+                "w", encoding="utf-8"
+            ) as f:
+                json.dump(comptes_json, f, indent=2, ensure_ascii=False)
+############################################################################
+# Tiago fait des test merci de votre indulgence XD
+############################################################################
+
+
 
         # Écrire rejets.csv
         with (a.sortie / "rejets.csv").open(
