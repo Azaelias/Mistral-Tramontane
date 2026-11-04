@@ -1,6 +1,6 @@
 Opération Mistral, vérification J1
 Guilde : tramontane
-Date : 2026-11-02 17:02:20
+Date : 2026-11-03 09:06:34
 
 OK   2/2  les 3 scripts existent dans outils/ et sont exécutables
 OK   1/1  shellcheck sans avertissement : sauvegarde.sh
@@ -19,4 +19,4 @@ OK   1/1  menage-logs.sh : compresse seulement les .log de 2 jours ou plus
 OK   1/1  menage-logs.sh relancé : rien ne change, code 0
 
 NOTE : 20/20   XP gagnée : 200
-Sceau : 87ebffa4a656
+Sceau : 1eb3139e86b0
