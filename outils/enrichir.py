@@ -26,6 +26,9 @@ CACHE = Path.home() / ".cache" / "mistral" / "reputation.json"  # emplacement im
 DUREE = 3600  # durée de validité d'une réponse, en secondes (1 heure)
 # <<< FIN AJOUT 1.2
 
+# >>> AJOUT 2.1 : seuil au-dessus duquel une adresse est jugée dangereuse
+SEUIL_DANGER = 50  # score >= 50 : apparaît dans le tableau Markdown
+# <<< FIN AJOUT 2.1
 
 def lire_adresses(chemin):
     """Dernier mot de chaque ligne, sans doublon (ordre conservé)."""
@@ -80,11 +83,35 @@ def reputation_avec_cache(session, ip, cache):
     return data
 # <<< FIN AJOUT 1.3
 
+# >>> AJOUT 2.2 : génération du tableau Markdown
+def ecrire_markdown(resultats, chemin):
+    """Écrit un tableau Markdown des adresses dangereuses (score >= seuil).
+
+    `resultats` est déjà trié (score décroissant), l'ordre est donc conservé.
+    """
+    dangereuses = [r for r in resultats if r["score"] >= SEUIL_DANGER]
+
+    with open(chemin, "w", encoding="utf-8") as f:
+        f.write("| Adresse | Score | Catégories |\n")
+        # Ligne de séparation obligatoire pour que GitHub affiche un tableau.
+        # ---: aligne la colonne Score à droite.
+        f.write("|---|---:|---|\n")
+        for r in dangereuses:
+            # Un "|" dans une valeur casserait le tableau : on l'échappe.
+            cats = ", ".join(r["categories"]).replace("|", "\\|")
+            f.write(f"| `{r['ip']}` | {r['score']} | {cats} |\n")
+
+    return len(dangereuses)
+# <<< FIN AJOUT 2.2
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--entree", required=True)
     p.add_argument("--sortie", required=True)
+    # >>> AJOUT 3 : option --markdown (facultative)
+    p.add_argument("--markdown", action="store_true",
+                   help="écrit aussi rapport.md (adresses dangereuses)")
+    # <<< FIN AJOUT 3
     args = p.parse_args()
 
     jeton = os.environ.get("VIGIE_TOKEN", "")
@@ -133,7 +160,12 @@ def main():
         w.writerow(["ip", "score", "categories"])
         for r in resultats:
             w.writerow([r["ip"], r["score"], ",".join(r["categories"])])
-
+   
+    # >>> AJOUT 4 : écriture du rapport.md si demandé
+    if args.markdown:
+        n = ecrire_markdown(resultats, os.path.join(args.sortie, "rapport.md"))
+        log.info("rapport.md : %d adresse(s) dangereuse(s)", n)
+    # <<< FIN AJOUT 4
     return 0
 
 
