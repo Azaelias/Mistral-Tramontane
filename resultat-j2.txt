@@ -1,6 +1,6 @@
 Opération Mistral, vérification J2
 Guilde : tramontane
-Date : 2026-11-03 14:22:57
+Date : 2026-11-05 14:02:17
 
 OK   1/1  .gitignore exclut .venv
 OK   1/1  requirements.txt présent à la racine du dépôt
@@ -13,4 +13,4 @@ OK   2/2  analyse_web.py : chemins sensibles
 OK   1/1  analyse_web.py en sortie texte par défaut
 
 NOTE : 20/20   XP gagnée : 200
-Sceau : 509edaa50985
+Sceau : 92c8f0a1ec8d

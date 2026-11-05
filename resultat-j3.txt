@@ -1,6 +1,6 @@
 Opération Mistral, vérification J3
 Guilde : tramontane
-Date : 2026-11-04 15:03:24
+Date : 2026-11-05 14:02:06
 
 OK   2/2  enrichir.py se termine sans erreur malgré les 429 et 503
 OK   3/3  rapport.json : adresses, scores et catégories, tri par score
@@ -13,4 +13,4 @@ OK   4/4  tickets.py lancé deux fois : un seul ticket par adresse dangereuse
 OK   1/1  aucun ticket sous le seuil
 
 NOTE : 20/20   XP gagnée : 200
-Sceau : 8298677b2393
+Sceau : 2dee329167f4
