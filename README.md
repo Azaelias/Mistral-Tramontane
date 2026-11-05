@@ -26,3 +26,20 @@ Mission 3.1 :
 | 503  | Service indisponible| Requête 2 (isolée)            | Erreur temporaire : réessayer quelques    |
 |      |                     |                               | fois avec une pause, puis abandonner.     |
 +------+---------------------+-------------------------------+-------------------------------------------+
+
+
+3.2
+
+python3 incidents.py --sortie /tmp/incidents.csv
+
+pages=4  total=71
+len(tous) = 71
+sites = ['Avignon', 'Fos', 'Nice', 'Toulon', 'Vitrolles']
+CSV écrit dans /tmp/incidents.csv
+
+site       haute  moyenne  basse  total
+Avignon    1      3        8      12
+Fos        2      6        5      13
+Nice       4      4        3      11
+Toulon     3      7        10     20
+Vitrolles  4      3        8      15
