@@ -5,7 +5,7 @@ set -euo pipefail
 VEILLE=/guilde/outils/veille.sh
 SAUVEGARDE=/guilde/outils/sauvegarde.sh
 
-L1="*/5 * * * * $VEILLE >> /var/log/mistral/veille.log 2>&1"
+L1="*/2 * * * * $VEILLE >> /var/log/mistral/veille.log 2>&1"
 L2="30 2 * * * $SAUVEGARDE /srv/mistral/partage >> /var/log/mistral/sauvegarde-cron.log 2>&1"
 
 mkdir -p /var/log/mistral
