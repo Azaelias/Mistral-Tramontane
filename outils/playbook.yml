@@ -1,0 +1,20 @@
+---
+- name: Configuration du Kit de Veille J5
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Planifier veille.sh toutes les 5 minutes
+      ansible.builtin.cron:
+        name: "Veille toutes les 5 minutes"
+        minute: "*/5"
+        job: "/guilde/outils/veille.sh"
+        state: present
+
+    - name: Planifier sauvegarde.sh une fois par jour à heure fixe
+      ansible.builtin.cron:
+        name: "Sauvegarde quotidienne"
+        minute: "0"
+        hour: "2"
+        job: "/guilde/outils/sauvegarde.sh"
+        state: present
