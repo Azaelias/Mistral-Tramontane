@@ -1,6 +1,6 @@
 Opération Mistral, vérification J5
 Guilde : tramontane
-Date : 2026-11-06 14:05:12
+Date : 2026-11-08 20:32:36
 
 OK   2/2  crontab : veille.sh au moins toutes les 5 minutes
 OK   1/1  crontab : chemin absolu vers veille.sh
@@ -12,4 +12,4 @@ OK   3/3  aucun ticket pour les leurres
 OK   3/3  les adresses du Spectre sont signalées moins de 6 minutes après leur arrivée
 
 NOTE : 20/20   XP gagnée : 200
-Sceau : 495e6e1077b6
+Sceau : da54ddf07c52
