@@ -1,131 +1,133 @@
 #!/usr/bin/env bash
+# vigie.sh : interroge l'API Vigie avec curl et jq (aucun Python requis).
+#
+# Usage :
+#   vigie.sh reputation IP    affiche "IP score"
+#   vigie.sh tickets          affiche une ligne "IP score" par ticket
+#   vigie.sh ticket-ip IP     affiche les tickets liés à cette IP
+#
+# Codes de sortie :
+#   0 succès | 1 échec réseau/serveur après 6 essais
+#   2 mauvais usage ou IP invalide | 3 jeton absent ou refusé
+
+# -e : stop à la première erreur ; -u : variable non définie = erreur ;
+# pipefail : un pipeline échoue si n'importe laquelle de ses commandes échoue.
 set -euo pipefail
 
-# Fichiers temporaires pour stocker les en-tetes et le corps HTTP
-HEADER_FILE="$(mktemp)"
-BODY_FILE="$(mktemp)"
-trap 'rm -f "$HEADER_FILE" "$BODY_FILE"' EXIT
+# --- Configuration -----------------------------------------------------------
+API="http://vigie.mistral.test:8080/api/v1"
+ENV_FILE="/etc/mistral/vigie.env"   # fichier protégé contenant VIGIE_TOKEN=...
 
-# 1. Extraction securisee du jeton VIGIE_TOKEN et de VIGIE_URL
-VIGIE_TOKEN="${VIGIE_TOKEN:-}"
-VIGIE_URL="${VIGIE_URL:-}"
-
-if [[ -f /etc/mistral/vigie.env ]]; then
-    if [[ -z "$VIGIE_TOKEN" ]]; then
-        VIGIE_TOKEN="$(sed -n 's/^[[:space:]]*\(export[[:space:]]*\)\?VIGIE_TOKEN=['"'"'"]\?//; s/['"'"'"]\?[[:space:]\r]*$//p' /etc/mistral/vigie.env | tail -n 1 || true)"
-    fi
-    if [[ -z "$VIGIE_URL" ]]; then
-        VIGIE_URL="$(sed -n 's/^[[:space:]]*\(export[[:space:]]*\)\?VIGIE_URL=['"'"'"]\?//; s/['"'"'"]\?[[:space:]\r]*$//p' /etc/mistral/vigie.env | tail -n 1 || true)"
-    fi
+# --- Lecture du jeton --------------------------------------------------------
+# Priorité à la variable d'environnement. À défaut, on lit le fichier protégé
+# avec sed (on ne le "source" pas : on n'exécute pas son contenu).
+# "|| true" évite que set -e n'arrête le script si le fichier est illisible ;
+# on traite ce cas juste après. Le jeton n'est jamais affiché.
+if [[ -z "${VIGIE_TOKEN:-}" ]]; then
+    VIGIE_TOKEN="$(sed -n 's/^VIGIE_TOKEN=//p' "$ENV_FILE" 2>/dev/null || true)"
 fi
-
-if [[ -z "$VIGIE_TOKEN" ]]; then
-    echo "erreur: VIGIE_TOKEN introuvable" >&2
+if [[ -z "${VIGIE_TOKEN:-}" ]]; then
+    echo "erreur : aucun jeton Vigie disponible" >&2
     exit 3
 fi
 
-VIGIE_URL="${VIGIE_URL:-http://127.0.0.1:5000}"
+# --- Fonctions utilitaires ---------------------------------------------------
 
-# 2 & 3. Fonction d-appel HTTP avec curl, lecture des en-tetes et retries
+# Affiche l'aide sur stderr et sort avec le code 2 (mauvais usage).
+usage() {
+    echo "usage : $0 reputation IP | tickets | ticket-ip IP" >&2
+    exit 2
+}
+
+# Vérifie qu'un argument ressemble à une adresse IPv4 (4 groupes de chiffres).
+# Cela évite d'injecter n'importe quel texte dans l'URL.
+verifier_ip() {
+    [[ $1 =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || {
+        echo "erreur : adresse IP invalide" >&2
+        exit 2
+    }
+}
+
+# appel CHEMIN : interroge l'API et affiche le corps JSON sur stdout si HTTP 200.
+# Gère les erreurs selon le code HTTP, pas selon le code de sortie de curl
+# (curl renvoie 0 même sur une réponse 500).
 appel() {
-    local url="$1"
-    local attempt=1
-    local max_attempts=6
+    local chemin=$1 entetes corps code attente essai
 
-    while true; do
-        : > "$HEADER_FILE"
-        : > "$BODY_FILE"
+    # Deux fichiers temporaires : un pour les en-têtes (utile pour Retry-After),
+    # un pour le corps de la réponse.
+    entetes=$(mktemp)
+    corps=$(mktemp)
+    # Supprime les fichiers temporaires quand la fonction se termine.
+    # shellcheck disable=SC2064
+    trap "rm -f '$entetes' '$corps'" RETURN
 
-        local http_code
-        http_code="$(curl -s -m 5 -D "$HEADER_FILE" -o "$BODY_FILE" -w '%{http_code}' \
+    # Jusqu'à 6 essais au total.
+    for essai in 1 2 3 4 5 6; do
+        # -s : silencieux ; -m 5 : abandon après 5 s ; -D : en-têtes dans un fichier ;
+        # -o : corps dans un fichier ; -w : n'affiche que le code HTTP.
+        # Si curl échoue (réseau coupé, délai dépassé), on force le code 000.
+        code=$(curl -s -m 5 -D "$entetes" -o "$corps" -w '%{http_code}' \
             -H "Authorization: Bearer $VIGIE_TOKEN" \
-            -H "X-Vigie-Token: $VIGIE_TOKEN" \
-            "$url" || true)"
+            "$API$chemin" || echo 000)
 
-        case "$http_code" in
+        case "$code" in
             200)
+                # Succès : on transmet le corps et on quitte la fonction.
+                cat "$corps"
                 return 0
                 ;;
             401)
-                echo "jeton refusé" >&2
+                # Jeton refusé : inutile de réessayer.
+                echo "erreur : jeton refusé" >&2
                 exit 3
                 ;;
             429)
-                local retry_after
-                retry_after="$(grep -i '^Retry-After:' "$HEADER_FILE" | tr -d '\r' | awk '{print $2}' || true)"
-                if [[ -z "$retry_after" || ! "$retry_after" =~ ^[0-9]+$ ]]; then
-                    retry_after=1
-                fi
-                sleep "$retry_after"
-                ;;
-            503|000)
-                if (( attempt >= max_attempts )); then
-                    echo "Erreur HTTP ${http_code}" >&2
-                    exit 1
-                fi
-                sleep "$attempt"
-                (( attempt++ ))
+                # Trop de requêtes : le serveur indique combien de secondes
+                # attendre dans l'en-tête Retry-After. Sans valeur, on attend 1 s.
+                attente=$(sed -n 's/^[Rr]etry-[Aa]fter: *\([0-9]*\).*/\1/p' "$entetes" | head -n 1)
+                sleep "${attente:-1}"
                 ;;
             *)
-                if (( attempt >= max_attempts )); then
-                    echo "Erreur HTTP ${http_code:-inconnu}" >&2
-                    exit 1
-                fi
-                sleep "$attempt"
-                (( attempt++ ))
+                # 503 ou autre erreur : attente croissante (1 s, 2 s, 3 s...).
+                sleep "$essai"
                 ;;
         esac
     done
-}
 
-# 4. Formatage JSON avec jq : affiche "<adresse> <score>"
-format_json() {
-    jq -r '
-        if type == "array" then
-            .[]
-        elif type == "object" and .tickets then
-            .tickets[]
-        else
-            .
-        end
-        | select((.ip // .adresse) != null)
-        | "\(.ip // .adresse) \(.score // .reputation)"
-    ' "$BODY_FILE"
-}
-
-# Analyse de la sous-commande
-if [[ $# -lt 1 ]]; then
-    echo "Usage: $0 {reputation IP|tickets|ticket-ip IP}" >&2
+    # Les 6 essais ont échoué.
+    echo "erreur : échec après 6 essais (dernier code HTTP $code)" >&2
     exit 1
-fi
+}
 
-COMMAND="$1"
+# --- Programme principal -----------------------------------------------------
 
-case "$COMMAND" in
+# Il faut au moins une sous-commande.
+[[ $# -ge 1 ]] || usage
+
+case "$1" in
     reputation)
-        if [[ $# -lt 2 ]]; then
-            echo "Usage: $0 reputation IP" >&2
-            exit 1
-        fi
-        IP="$2"
-        appel "${VIGIE_URL}/reputation/${IP}"
-        format_json
+        # Réputation d'une IP : l'API renvoie un objet avec "ip" et "score".
+        # jq -r produit du texte brut, une ligne "adresse score".
+        [[ $# -eq 2 ]] || usage
+        verifier_ip "$2"
+        appel "/reputation/$2" | jq -r '"\(.ip) \(.score)"'
         ;;
     tickets)
-        appel "${VIGIE_URL}/tickets"
-        format_json
+        # Liste de tous les tickets : l'API renvoie {"tickets": [...]}.
+        # .tickets[] parcourt le tableau, une ligne par ticket.
+        # Hypothèse : chaque ticket a les champs "ip" et "score".
+        [[ $# -eq 1 ]] || usage
+        appel "/tickets" | jq -r '.tickets[] | "\(.ip) \(.score)"'
         ;;
     ticket-ip)
-        if [[ $# -lt 2 ]]; then
-            echo "Usage: $0 ticket-ip IP" >&2
-            exit 1
-        fi
-        IP="$2"
-        appel "${VIGIE_URL}/tickets/${IP}"
-        format_json
+        # Tickets d'une IP donnée : filtre côté serveur via ?ip=...
+        # (le chemin /tickets/ip/IP n'existe pas : il renvoie 404).
+        [[ $# -eq 2 ]] || usage
+        verifier_ip "$2"
+        appel "/tickets?ip=$2" | jq -r '.tickets[] | "\(.ip) \(.score)"'
         ;;
     *)
-        echo "Erreur: sous-commande $COMMAND inconnue" >&2
-        exit 1
+        usage
         ;;
 esac
